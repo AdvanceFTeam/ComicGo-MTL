@@ -2,12 +2,6 @@ Flask==3.1.0
 requests==2.32.3
 beautifulsoup4==4.12.3
 python-dotenv==1.0.1
-
-# OCR — detects Korean text with bounding boxes
 easyocr>=1.7.1
-
-# Free translation — wraps Google Translate, no API key needed
 deep-translator>=1.11.4
-
-# Image processing (used to get image dimensions for bounding box normalisation)
 Pillow>=10.0.0
