@@ -44,7 +44,7 @@ def load_comics():
                 "cover": cover,
                 "genres": ["MTL", "Naver"],
                 "translator": "Uploaded MTL",
-                "summary": "Uploaded chapter metadata from Supabase.",
+                "summary": "Uploaded chapter.",
                 "chapters": [_chapter_from_row(row) for row in chapters],
             }
         )
