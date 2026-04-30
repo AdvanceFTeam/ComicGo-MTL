@@ -10,7 +10,7 @@ from flask import Flask, abort, jsonify, render_template, request, send_from_dir
 from PIL import Image, ImageFilter, ImageOps, ImageEnhance
 
 from data.catalog import get_comic, load_comics
-#using easycorer for OCR, which is a bit heavy to load
+#using EasyOCR for OCR, which is a bit heavy to load
 _ocr_reader  = None
 _ocr_ready   = False
 _ocr_lock    = threading.Lock()
