@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}{{ comic.title }} Ch. {{ chapter.number }} - ComicGo{% endblock %}
+
+{% block content %}
+
+<div id="read-progress"><div id="read-progress-bar"></div></div>
+
+<section class="reader-shell">
+  <div class="reader-toolbar">
+    <a class="text-link back-link" href="/comic/{{ comic.slug }}">← {{ comic.title }}</a>
+    <div class="toolbar-center">
+      <p class="eyebrow">Chapter {{ chapter.number }}</p>
+      <h1>{{ chapter.title }}</h1>
+    </div>
+    <div class="reader-actions">
+      <button id="mtl-toggle" class="button secondary mtl-btn" aria-pressed="true">
+        <span class="mtl-dot"></span> MTL: ON
+      </button>
+      {% if previous_chapter %}
+      <a class="button secondary" href="/read/{{ comic.slug }}/{{ previous_chapter.number }}">‹ Prev</a>
+      {% endif %}
+      {% if next_chapter %}
+      <a class="button primary" href="/read/{{ comic.slug }}/{{ next_chapter.number }}">Next ›</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="page-nav-bar">
+    <span id="page-counter" class="page-counter">Page <span id="cur-page">1</span> / {{ chapter.pages|length }}</span>
+    <div class="page-jump">
+      <input id="page-jump-input" type="number" min="1" max="{{ chapter.pages|length }}" value="1" aria-label="Jump to page">
+      <button id="page-jump-btn" class="button secondary">Go</button>
+    </div>
+  </div>
+
+  <div id="ocr-banner" class="ocr-banner" style="display:none">
+    <span class="ocr-spinner"></span> OCR model loading - translations will appear shortly
+  </div>
+
+  <div class="reader-pages" data-reader>
+    {% for page in chapter.pages %}
+    <article class="comic-page" id="page-{{ loop.index }}" data-page="{{ loop.index }}">
+      {% if page.public_url %}
+      <div class="page-wrapper">
+        <img
+          class="reader-image"
+          src="{{ page.public_url }}"
+          alt="Page {{ loop.index }}"
+          loading="{{ 'eager' if loop.index <= 3 else 'lazy' }}"
+          data-src="{{ page.public_url }}"
+          crossorigin="anonymous"
+        >
+        <canvas class="translation-canvas" aria-hidden="true"></canvas>
+        <div class="translate-indicator"></div>
+      </div>
+      {% else %}
+      <div class="panel-art"><span>{{ loop.index }}</span></div>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+
+  <div class="chapter-footer-nav">
+    {% if previous_chapter %}
+    <a class="button secondary" href="/read/{{ comic.slug }}/{{ previous_chapter.number }}">‹ Previous chapter</a>
+    {% else %}<span></span>{% endif %}
+    <a class="button secondary" href="/comic/{{ comic.slug }}">Chapter list</a>
+    {% if next_chapter %}
+    <a class="button primary" href="/read/{{ comic.slug }}/{{ next_chapter.number }}">Next chapter ›</a>
+    {% else %}<span></span>{% endif %}
+  </div>
+</section>
+
+<style>
+#read-progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:100;pointer-events:none}
+#read-progress-bar{height:100%;width:0%;background:var(--orange);transition:width .1s linear}
+.page-nav-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;width:min(820px,100%);margin:0 auto 16px;font-size:.85rem;color:var(--muted)}
+.page-jump{display:flex;gap:6px}
+.page-jump input{width:70px;min-height:34px;padding:0 8px;text-align:center;font-size:.85rem}
+.page-jump .button{min-height:34px;padding:0 12px;font-size:.85rem}
+.ocr-banner{display:flex;align-items:center;gap:10px;width:min(820px,100%);margin:0 auto 14px;padding:10px 14px;background:#1a1000;border:1px solid var(--line-strong);border-radius:6px;font-size:.88rem;color:var(--orange-2)}
+.ocr-spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--orange-2);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mtl-btn{display:flex;align-items:center;gap:7px}
+.mtl-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;transition:background .2s}
+.page-wrapper{position:relative;display:inline-block;width:100%;line-height:0}
+.page-wrapper .reader-image{display:block;width:100%;height:auto}
+.translation-canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.translate-indicator{position:absolute;bottom:6px;right:8px;width:8px;height:8px;border-radius:50%;background:transparent;transition:background .3s}
+.translate-indicator.loading{background:var(--orange);animation:pulse 1s ease-in-out infinite}
+.translate-indicator.done{background:#4ade80}
+.translate-indicator.empty{background:var(--muted-2)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.chapter-footer-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;width:min(820px,100%);margin:28px auto 0;padding-top:22px;border-top:1px solid var(--line)}
+.toolbar-center{min-width:0}
+.toolbar-center h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reader-toolbar{gap:14px}
+.back-link{white-space:nowrap}
+</style>
+
+<script>
+(function(){
+'use strict';
+const FONT='Inter,"Segoe UI",system-ui,sans-serif',DELAY=250;
+let mtlOn=true;
+const cache={},flying={};
+
+const banner=document.getElementById('ocr-banner');
+let ocrReady=false;
+async function waitOcr(){
+  try{const r=await fetch('/api/ocr_status'),d=await r.json();if(d.ready){ocrReady=true;banner.style.display='none';return;}}catch(_){}
+  banner.style.display='flex';setTimeout(waitOcr,3000);
+}
+waitOcr();
+
+function delay(ms){return new Promise(r=>setTimeout(r,ms));}
+async function fetchTrans(url){
+  if(cache[url]!==undefined)return cache[url];
+  if(flying[url])return flying[url];
+  async function attempt(left){
+    try{
+      const r=await fetch('/api/translate?url='+encodeURIComponent(url));
+      const d=r.ok?await r.json():{bubbles:[],ocr_ready:true};
+      if(!d.ocr_ready&&left>0){await delay(5000);return attempt(left-1);}
+      return d.bubbles||[];
+    }catch(_){if(left>0){await delay(3000);return attempt(left-1);}return[];}
+  }
+  const p=attempt(12).then(b=>{cache[url]=b;return b;}).finally(()=>delete flying[url]);
+  flying[url]=p;return p;
+}
+
+function drawBubbles(canvas,img,bubbles){
+  canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+  canvas.style.width='100%';canvas.style.height=img.clientHeight+'px';
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(!bubbles.length)return;
+  const W=canvas.width,H=canvas.height;
+  bubbles.forEach(b=>{
+    const bx=b.x*W,by=b.y*H,bw=b.w*W,bh=b.h*H;
+    ctx.save();
+    ctx.fillStyle='#ffffff';ctx.strokeStyle='#cccccc';
+    ctx.lineWidth=Math.max(1,W*0.0012);
+    rrect(ctx,bx,by,bw,bh,W*0.005);ctx.fill();ctx.stroke();
+    const fs=Math.max(11,Math.min(bh*0.28,bw*0.09,18));
+    ctx.fillStyle='#111';ctx.font='600 '+fs+'px '+FONT;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    wrapText(ctx,b.text||'',bx+bw/2,by+bh/2,bw-10,fs*1.35,bh);
+    ctx.restore();
+  });
+}
+function rrect(ctx,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);
+  ctx.beginPath();ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
+}
+function wrapText(ctx,text,cx,cy,maxW,lh,maxH){
+  const ws=text.split(' '),lines=[];let cur='';
+  for(const w of ws){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width>maxW&&cur){lines.push(cur);cur=w;}else cur=t;}
+  if(cur)lines.push(cur);
+  let y=cy-(lines.length*lh)/2+lh/2;
+  for(const l of lines){if(y>cy+maxH/2)break;ctx.fillText(l,cx,y);y+=lh;}
+}
+
+function initPage(wrapper){
+  const img=wrapper.querySelector('img.reader-image');
+  const canvas=wrapper.querySelector('.translation-canvas');
+  const dot=wrapper.querySelector('.translate-indicator');
+  if(!img||!canvas)return;
+  const url=img.dataset.src;if(!url)return;
+  let done=false;
+  async function translate(){
+    if(done)return;done=true;
+    dot.className='translate-indicator loading';
+    const bubbles=await fetchTrans(url);
+    dot.className='translate-indicator '+(bubbles.length?'done':'empty');
+    if(!bubbles.length)return;
+    function draw(){
+      if(img.naturalWidth){drawBubbles(canvas,img,bubbles);if(!mtlOn)canvas.style.display='none';}
+      else img.addEventListener('load',draw,{once:true});
+    }
+    draw();
+  }
+  const obs=new IntersectionObserver(e=>{if(e[0].isIntersecting){obs.disconnect();setTimeout(translate,DELAY);}},{rootMargin:'300px'});
+  obs.observe(wrapper);
+}
+document.querySelectorAll('.page-wrapper').forEach(initPage);
+
+const toggleBtn=document.getElementById('mtl-toggle');
+toggleBtn.addEventListener('click',()=>{
+  mtlOn=!mtlOn;toggleBtn.setAttribute('aria-pressed',mtlOn);
+  toggleBtn.querySelector('.mtl-dot').style.background=mtlOn?'#4ade80':'';
+  toggleBtn.childNodes[toggleBtn.childNodes.length-1].textContent=' MTL: '+(mtlOn?'ON':'OFF');
+  document.querySelectorAll('.translation-canvas').forEach(c=>c.style.display=mtlOn?'':'none');
+});
+
+let rt;
+window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{
+  document.querySelectorAll('.page-wrapper').forEach(w=>{
+    const img=w.querySelector('img.reader-image'),canvas=w.querySelector('.translation-canvas');
+    if(!img||!canvas||!img.naturalWidth)return;
+    const b=cache[img.dataset.src];if(b&&b.length)drawBubbles(canvas,img,b);
+  });
+},200);});
+
+const bar=document.getElementById('read-progress-bar');
+window.addEventListener('scroll',()=>{const h=document.documentElement;bar.style.width=Math.min(100,h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';},{passive:true});
+
+const curEl=document.getElementById('cur-page');
+const pages=[...document.querySelectorAll('.comic-page[data-page]')];
+if(pages.length){
+  const po=new IntersectionObserver(entries=>{
+    let top=null;
+    entries.forEach(e=>{if(e.isIntersecting&&(!top||e.boundingClientRect.top<top.boundingClientRect.top))top=e;});
+    if(top)curEl.textContent=top.target.dataset.page;
+  },{threshold:0.3});
+  pages.forEach(p=>po.observe(p));
+}
+
+document.getElementById('page-jump-btn')?.addEventListener('click',()=>{
+  const v=parseInt(document.getElementById('page-jump-input').value,10);
+  document.getElementById('page-'+v)?.scrollIntoView({behavior:'smooth',block:'start'});
+});
+document.getElementById('page-jump-input')?.addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('page-jump-btn').click();});
+
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if(e.key==='ArrowDown'||e.key===' ')window.scrollBy({top:window.innerHeight*.85,behavior:'smooth'});
+  if(e.key==='ArrowUp')window.scrollBy({top:-window.innerHeight*.85,behavior:'smooth'});
+  if(e.key==='ArrowRight'){const a=document.querySelector('a.button.primary[href*="/read/"]');if(a)location=a.href;}
+  if(e.key==='ArrowLeft'){const a=document.querySelector('a.button.secondary[href*="/read/"]:not(.back-link)');if(a)location=a.href;}
+});
+
+})();
+</script>
+{% endblock %}

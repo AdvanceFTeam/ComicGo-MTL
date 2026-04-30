@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}{{ comic.title }} - ComicGo{% endblock %}
+
+{% block content %}
+<section class="detail-layout">
+  <div class="detail-cover">
+    <img src="{{ comic.cover }}" alt="{{ comic.title }} cover">
+    <div class="cover-actions">
+      <a class="button primary full-width" href="/read/{{ comic.slug }}/{{ comic.chapters[0].number }}">
+        ▶ Read Latest
+      </a>
+      {% if comic.chapters|length > 1 %}
+      <a class="button secondary full-width" href="/read/{{ comic.slug }}/{{ comic.chapters[-1].number }}">
+        ↩ Start from Ch. 1
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="detail-main">
+    <a class="text-link back-link" href="/">← Catalog</a>
+    <div class="title-row">
+      <div>
+        <p class="eyebrow">{{ comic.format|title }} · {{ comic.origin }}</p>
+        <h1>{{ comic.title }}</h1>
+      </div>
+      <span class="score">{{ comic.rating }}</span>
+    </div>
+    <p class="summary">{{ comic.summary }}</p>
+
+    <div class="stats-grid">
+      <div>
+        <span>Status</span>
+        <strong>{{ comic.status }}</strong>
+      </div>
+      <div>
+        <span>Chapters</span>
+        <strong>{{ comic.chapters|length }}</strong>
+      </div>
+      <div>
+        <span>Updated</span>
+        <strong>{{ comic.updated_at }}</strong>
+      </div>
+      <div>
+        <span>Translation</span>
+        <strong>{{ comic.translator }}</strong>
+      </div>
+    </div>
+
+    <div class="tag-row large">
+      {% for genre in comic.genres %}
+      <span>{{ genre }}</span>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="content-band" id="chapters">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">{{ comic.chapters|length }} chapter{% if comic.chapters|length != 1 %}s{% endif %}</p>
+      <h2>Chapter list</h2>
+    </div>
+    <button class="button secondary" id="sort-toggle">↑ Newest first</button>
+  </div>
+
+  <div class="chapter-list" id="chapter-list">
+    {% for chapter in comic.chapters %}
+    <a class="chapter-row" href="/read/{{ comic.slug }}/{{ chapter.number }}">
+      <span class="chapter-title">Chapter {{ chapter.number }}</span>
+      <span class="chapter-sub">{{ chapter.title }}</span>
+      <span class="chapter-date">{{ chapter.quality }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<script>
+const list  = document.getElementById('chapter-list');
+const btn   = document.getElementById('sort-toggle');
+let newest  = true;
+
+btn.addEventListener('click', () => {
+  newest = !newest;
+  btn.textContent = newest ? '↑ Newest first' : '↓ Oldest first';
+  const rows = [...list.querySelectorAll('.chapter-row')];
+  rows.reverse().forEach(r => list.appendChild(r));
+});
+</script>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}ComicGo - MTL Comic Reader{% endblock %}
+
+{% block content %}
+<section class="dashboard-hero">
+  <div class="hero-copy">
+    <p class="eyebrow">MTL library</p>
+    <h1>ComicGo</h1>
+    <p class="hero-text">Machine-translated manhwa, manga, and manhua — fast, clean, chapter by chapter.</p>
+  </div>
+
+  <form class="search-panel" id="filter-form" action="/" method="get">
+    <label class="search-box">
+      <span>Search</span>
+      <input id="q-input" name="q" value="{{ filters.get('q', '') }}"
+             placeholder="Title, genre, or keyword" autocomplete="off">
+    </label>
+    <div class="filter-grid">
+      <label>
+        <span>Type</span>
+        <select name="format" data-autosubmit>
+          <option value="all">All types</option>
+          {% for item in formats %}
+          <option value="{{ item }}" {% if filters.get('format') == item %}selected{% endif %}>{{ item|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Origin</span>
+        <select name="origin" data-autosubmit>
+          <option value="all">All origins</option>
+          {% for item in origins %}
+          <option value="{{ item }}" {% if filters.get('origin') == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Status</span>
+        <select name="status" data-autosubmit>
+          <option value="all">All status</option>
+          {% for item in statuses %}
+          <option value="{{ item }}" {% if filters.get('status') == item %}selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Sort</span>
+        <select name="sort" data-autosubmit>
+          <option value="updated"  {% if filters.get('sort','updated') == 'updated'  %}selected{% endif %}>Updated</option>
+          <option value="rating"   {% if filters.get('sort') == 'rating'   %}selected{% endif %}>Rating</option>
+          <option value="chapters" {% if filters.get('sort') == 'chapters' %}selected{% endif %}>Chapters</option>
+          <option value="title"    {% if filters.get('sort') == 'title'    %}selected{% endif %}>A–Z</option>
+        </select>
+      </label>
+    </div>
+    <div class="filter-actions">
+      <button class="button primary" type="submit">Find comics</button>
+      {% if filters.get('q') or filters.get('format','all') != 'all' or filters.get('origin','all') != 'all' or filters.get('status','all') != 'all' %}
+      <a class="button secondary" href="/">Clear filters</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+{% if featured %}
+<section class="content-band">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Top picks</p>
+      <h2>Featured translations</h2>
+    </div>
+    <a class="text-link" href="#catalog">View all →</a>
+  </div>
+  <div class="featured-grid">
+    {% for comic in featured %}
+    <article class="feature-card">
+      <a href="/comic/{{ comic.slug }}" class="feature-cover">
+        <img src="{{ comic.cover }}" alt="{{ comic.title }} cover" loading="lazy">
+      </a>
+      <div class="feature-body">
+        <span class="pill">{{ comic.format|title }}</span>
+        <h3><a href="/comic/{{ comic.slug }}">{{ comic.title }}</a></h3>
+        <p>{{ comic.summary }}</p>
+        <a class="button secondary" href="/comic/{{ comic.slug }}">Open series</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if latest_chapters %}
+<section class="content-band" id="latest">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">Fresh pages</p>
+      <h2>Latest chapter drops</h2>
+    </div>
+  </div>
+  <div class="chapter-list">
+    {% for chapter in latest_chapters %}
+    <a class="chapter-row" href="/read/{{ chapter.comic.slug }}/{{ chapter.number }}">
+      <span class="chapter-title">{{ chapter.comic.title }}</span>
+      <span class="chapter-sub">Ch. {{ chapter.number }} — {{ chapter.title }}</span>
+      <span class="chapter-date">{{ chapter.date }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="content-band" id="catalog">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">{{ comics|length }} result{% if comics|length != 1 %}s{% endif %}</p>
+      <h2>Catalog</h2>
+    </div>
+  </div>
+
+  {% if comics %}
+  <div class="comic-grid">
+    {% for comic in comics %}
+    <article class="comic-card">
+      <a href="/comic/{{ comic.slug }}" class="cover-link">
+        <img src="{{ comic.cover }}" alt="{{ comic.title }} cover" loading="lazy">
+        <span class="cover-badge">{{ comic.chapters|length }} ch</span>
+      </a>
+      <div class="comic-card-body">
+        <div class="meta-line">
+          <span>{{ comic.format|title }}</span>
+          <span class="rating-badge">{{ comic.rating }}</span>
+        </div>
+        <h3><a href="/comic/{{ comic.slug }}">{{ comic.title }}</a></h3>
+        <p>{{ comic.summary }}</p>
+        <div class="tag-row">
+          {% for genre in comic.genres[:3] %}
+          <span>{{ genre }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">📭</div>
+    <h3>No comics matched those filters.</h3>
+    <p>Try a broader search or clear your filters.</p>
+    <a class="button secondary" href="/">Reset catalog</a>
+  </div>
+  {% endif %}
+</section>
+
+<script>
+document.querySelectorAll('select[data-autosubmit]').forEach(sel => {
+  sel.addEventListener('change', () => document.getElementById('filter-form').submit());
+});
+
+let _st;
+document.getElementById('q-input')?.addEventListener('input', e => {
+  clearTimeout(_st);
+  _st = setTimeout(() => document.getElementById('filter-form').submit(), 600);
+});
+</script>
+{% endblock %}
